@@ -50,6 +50,24 @@
         .feedback-stars { display: flex; gap: 5px; font-size: 32px; cursor: pointer; margin: 20px 0; }
         .feedback-stars span { color: #d1d5db; }
         .feedback-stars span.active { color: #fbbf24; }
+        .form-group { margin-bottom: 20px; }
+        .form-group label { display: block; font-weight: 500; margin-bottom: 8px; }
+        .form-group input, .form-group select, .form-group textarea { 
+            width: 100%; 
+            padding: 10px; 
+            border: 1px solid #d1d5db; 
+            border-radius: 4px; 
+            font-family: inherit;
+        }
+        .btn { padding: 12px 24px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn:hover { background: #1d4ed8; }
+        .btn-secondary { background: #6b7280; }
+        .btn-secondary:hover { background: #4b5563; }
+        .success-message { background: #d1fae5; color: #065f46; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .error-message { background: #fee2e2; color: #991b1b; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .file-list { margin-top: 20px; }
+        .file-item { padding: 10px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .file-item button { background: #dc2626; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -64,17 +82,19 @@
         <div id="content"></div>
     </div>
 
-    <button class="emergency-btn">112</button>
+    <button class="emergency-btn" onclick="dialEmergency()">112</button>
 
     <script>
         // ============================================
-        // DATA LAYER - Mock Database
+        // DATA LAYER - User Submitted FIRs Storage
         // ============================================
         
-        const mockFIRs = {
+        let userFIRs = JSON.parse(localStorage.getItem('userFIRs')) || {
             '2024/ROH/1234': {
                 number: '2024/ROH/1234',
                 type: 'Theft',
+                name: 'Demo User',
+                phone: '+91-9876543210',
                 status: 'Under Investigation',
                 progress: 60,
                 officer: {
@@ -86,6 +106,7 @@
                 station: 'Sector 14 Police Station, Rohtak',
                 filedDate: '2024-12-20',
                 lastUpdate: '2024-12-23',
+                description: 'Mobile phone stolen from market area',
                 timeline: [
                     { stage: 'FIR Filed', date: '2024-12-20', status: 'completed' },
                     { stage: 'Officer Assigned', date: '2024-12-20', status: 'completed' },
@@ -95,20 +116,19 @@
                     { stage: 'Case Closure', date: 'Pending', status: 'pending' }
                 ],
                 avgTime: '45-60 days',
-                documents: ['FIR Copy', 'Evidence Photos', 'Witness Statement']
+                documents: ['FIR Copy', 'Evidence Photos', 'Witness Statement'],
+                evidence: []
             }
         };
 
         const policeStations = [
-            { id: 1, name: 'Sector 14 Police Station', lat: 28.8955, lng: 76.6066, cases: 45, officer: 'SI Kumar' },
-            { id: 2, name: 'Civil Lines Police Station', lat: 28.8845, lng: 76.6156, cases: 62, officer: 'SI Sharma' },
-            { id: 3, name: 'Model Town Police Station', lat: 28.9055, lng: 76.5966, cases: 38, officer: 'SI Verma' }
+            { id: 1, name: 'Sector 14 Police Station', lat: 28.8955, lng: 76.6066, cases: 45, officer: 'SI Kumar', address: 'Sector 14, Rohtak, Haryana' },
+            { id: 2, name: 'Civil Lines Police Station', lat: 28.8845, lng: 76.6156, cases: 62, officer: 'SI Sharma', address: 'Civil Lines, Rohtak, Haryana' },
+            { id: 3, name: 'Model Town Police Station', lat: 28.9055, lng: 76.5966, cases: 38, officer: 'SI Verma', address: 'Model Town, Rohtak, Haryana' }
         ];
 
-        const notifications = [
-            { id: 1, text: 'FIR #2024/ROH/1234 registered successfully', time: '2 hours ago', read: false },
-            { id: 2, text: 'Officer Singh assigned to your case', time: '5 hours ago', read: false },
-            { id: 3, text: 'Investigation update available', time: '1 day ago', read: true }
+        let userNotifications = JSON.parse(localStorage.getItem('userNotifications')) || [
+            { id: 1, text: 'Welcome to Smart FIR Tracking System', time: 'Just now', read: false }
         ];
 
         const chatResponses = {
@@ -116,7 +136,10 @@
             'cyber': 'For cyber fraud: 1) Save all transaction details, 2) Screenshot conversations, 3) Bank statements, 4) File at cybercrime.gov.in or visit Cyber Cell. Act quickly!',
             'documents': 'Required documents: 1) Identity proof (Aadhaar/PAN/Driving License), 2) Address proof, 3) Evidence related to crime, 4) Witness details if any.',
             'status': 'Enter your FIR number in the Track FIR section to see real-time status updates.',
-            'time': 'Average case resolution time: Theft (45-60 days), Cyber Crime (60-90 days), Assault (30-45 days). Your case timeline may vary.'
+            'time': 'Average case resolution time: Theft (45-60 days), Cyber Crime (60-90 days), Assault (30-45 days). Your case timeline may vary.',
+            'file': 'To file a new FIR, go to the "File New FIR" tab and fill in all required details. You can also visit your nearest police station.',
+            'track': 'To track your FIR, enter your FIR number in the search box on the dashboard. You will see real-time updates and progress.',
+            'help': 'I can help you with: filing FIR, tracking status, required documents, nearby police stations, and general queries. What do you need help with?'
         };
 
         // ============================================
@@ -125,13 +148,14 @@
         
         let appState = {
             activeTab: 'dashboard',
-            currentFIR: mockFIRs['2024/ROH/1234'],
+            currentFIR: userFIRs['2024/ROH/1234'],
             firNumber: '',
             chatMessages: [
-                { sender: 'bot', text: 'Hello! How can I help you with filing or tracking your FIR?' }
+                { sender: 'bot', text: 'Hello! How can I help you with filing or tracking your FIR? Try asking about "theft", "cyber crime", "documents", or "file FIR".' }
             ],
             selectedStation: null,
-            rating: 0
+            rating: 0,
+            uploadedFiles: []
         };
 
         // ============================================
@@ -143,17 +167,110 @@
             render();
         }
 
+        function saveToLocalStorage() {
+            localStorage.setItem('userFIRs', JSON.stringify(userFIRs));
+            localStorage.setItem('userNotifications', JSON.stringify(userNotifications));
+        }
+
         function trackFIR() {
-            const firNumber = document.getElementById('firInput').value;
-            if (mockFIRs[firNumber]) {
+            const input = document.getElementById('firInput');
+            const firNumber = input.value.trim();
+            
+            if (!firNumber) {
+                showMessage('error', 'Please enter a FIR number');
+                return;
+            }
+            
+            if (userFIRs[firNumber]) {
                 setState({ 
-                    currentFIR: mockFIRs[firNumber],
+                    currentFIR: userFIRs[firNumber],
                     firNumber: firNumber,
                     activeTab: 'dashboard'
                 });
+                showMessage('success', 'FIR found! Displaying details...');
             } else {
-                alert('FIR not found. Please check the number and try again.');
+                showMessage('error', 'FIR not found. Please check the number and try again.');
             }
+        }
+
+        function fileNewFIR(event) {
+            event.preventDefault();
+            
+            const formData = {
+                name: document.getElementById('firName').value,
+                phone: document.getElementById('firPhone').value,
+                email: document.getElementById('firEmail').value,
+                type: document.getElementById('firType').value,
+                station: document.getElementById('firStation').value,
+                description: document.getElementById('firDescription').value,
+                location: document.getElementById('firLocation').value,
+                dateTime: document.getElementById('firDateTime').value
+            };
+
+            // Validate
+            if (!formData.name || !formData.phone || !formData.type || !formData.description) {
+                showMessage('error', 'Please fill all required fields');
+                return;
+            }
+
+            // Generate FIR number
+            const year = new Date().getFullYear();
+            const random = Math.floor(1000 + Math.random() * 9000);
+            const firNumber = `${year}/ROH/${random}`;
+
+            // Create new FIR
+            const newFIR = {
+                number: firNumber,
+                ...formData,
+                status: 'Filed - Awaiting Assignment',
+                progress: 10,
+                officer: null,
+                filedDate: new Date().toISOString().split('T')[0],
+                lastUpdate: new Date().toISOString().split('T')[0],
+                timeline: [
+                    { stage: 'FIR Filed', date: new Date().toISOString().split('T')[0], status: 'completed' },
+                    { stage: 'Officer Assignment', date: 'Pending', status: 'pending' },
+                    { stage: 'Investigation', date: 'Pending', status: 'pending' },
+                    { stage: 'Evidence Collection', date: 'Pending', status: 'pending' },
+                    { stage: 'Report Preparation', date: 'Pending', status: 'pending' },
+                    { stage: 'Case Closure', date: 'Pending', status: 'pending' }
+                ],
+                avgTime: '45-60 days',
+                documents: ['FIR Copy'],
+                evidence: []
+            };
+
+            // Save to storage
+            userFIRs[firNumber] = newFIR;
+            saveToLocalStorage();
+
+            // Add notification
+            addNotification(`FIR #${firNumber} filed successfully! Your case is being processed.`);
+
+            // Show success
+            showMessage('success', `FIR Filed Successfully! Your FIR Number is: ${firNumber}. Please save this for tracking.`);
+
+            // Clear form
+            document.getElementById('newFIRForm').reset();
+
+            // Switch to dashboard
+            setTimeout(() => {
+                setState({ 
+                    currentFIR: newFIR,
+                    firNumber: firNumber,
+                    activeTab: 'dashboard'
+                });
+            }, 3000);
+        }
+
+        function addNotification(text) {
+            userNotifications.unshift({
+                id: Date.now(),
+                text: text,
+                time: 'Just now',
+                read: false
+            });
+            saveToLocalStorage();
         }
 
         function sendChatMessage() {
@@ -162,11 +279,9 @@
             
             if (!message) return;
 
-            // Add user message
             appState.chatMessages.push({ sender: 'user', text: message });
             render();
 
-            // Simulate bot response
             setTimeout(() => {
                 let response = "I understand your concern. For specific legal advice, please consult with a legal expert. You can also call the national helpline: 112 for emergencies.";
                 
@@ -181,7 +296,6 @@
                 appState.chatMessages.push({ sender: 'bot', text: response });
                 render();
                 
-                // Scroll to bottom
                 const chatMessages = document.getElementById('chatMessages');
                 if (chatMessages) {
                     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -195,6 +309,99 @@
             setState({ rating: stars });
         }
 
+        function submitFeedback() {
+            const feedback = document.getElementById('feedbackText').value;
+            const rating = appState.rating;
+
+            if (!rating) {
+                showMessage('error', 'Please select a rating');
+                return;
+            }
+
+            if (!feedback) {
+                showMessage('error', 'Please enter your feedback');
+                return;
+            }
+
+            addNotification(`Thank you for your ${rating}-star feedback! We value your input.`);
+            showMessage('success', 'Feedback submitted successfully! Thank you.');
+            
+            document.getElementById('feedbackText').value = '';
+            setState({ rating: 0 });
+        }
+
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            
+            for (let file of files) {
+                if (file.size > 10 * 1024 * 1024) {
+                    showMessage('error', `File ${file.name} is too large. Max size is 10MB.`);
+                    continue;
+                }
+
+                const fileData = {
+                    name: file.name,
+                    size: (file.size / 1024).toFixed(2) + ' KB',
+                    type: file.type,
+                    uploadDate: new Date().toISOString().split('T')[0]
+                };
+
+                appState.uploadedFiles.push(fileData);
+                
+                if (appState.currentFIR) {
+                    if (!appState.currentFIR.evidence) {
+                        appState.currentFIR.evidence = [];
+                    }
+                    appState.currentFIR.evidence.push(fileData);
+                    userFIRs[appState.currentFIR.number] = appState.currentFIR;
+                    saveToLocalStorage();
+                }
+            }
+
+            showMessage('success', `${files.length} file(s) uploaded successfully!`);
+            render();
+        }
+
+        function removeFile(index) {
+            appState.uploadedFiles.splice(index, 1);
+            
+            if (appState.currentFIR && appState.currentFIR.evidence) {
+                appState.currentFIR.evidence.splice(index, 1);
+                userFIRs[appState.currentFIR.number] = appState.currentFIR;
+                saveToLocalStorage();
+            }
+            
+            render();
+        }
+
+        function showMessage(type, message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            messageDiv.textContent = message;
+            
+            const content = document.getElementById('content');
+            content.insertBefore(messageDiv, content.firstChild);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 5000);
+        }
+
+        function dialEmergency() {
+            if (confirm('Dial Emergency Number 112?\n\nThis will call emergency services.')) {
+                alert('In a real app, this would dial 112.\n\nFor demo purposes, please dial 112 manually if you have an emergency.');
+            }
+        }
+
+        function markNotificationRead(id) {
+            const notif = userNotifications.find(n => n.id === id);
+            if (notif) {
+                notif.read = true;
+                saveToLocalStorage();
+                render();
+            }
+        }
+
         // ============================================
         // RENDER FUNCTIONS
         // ============================================
@@ -202,6 +409,7 @@
         function renderNavigation() {
             const tabs = [
                 { id: 'dashboard', label: 'Track FIR' },
+                { id: 'fileFIR', label: 'File New FIR' },
                 { id: 'map', label: 'Police Stations' },
                 { id: 'chatbot', label: 'FIR Assistant' },
                 { id: 'notifications', label: 'Notifications' },
@@ -249,6 +457,17 @@
                 </div>
 
                 <div class="card">
+                    <h2 style="margin-bottom: 15px">FIR Details</h2>
+                    <p><strong>FIR Number:</strong> ${fir.number}</p>
+                    <p><strong>Type:</strong> ${fir.type}</p>
+                    <p><strong>Complainant:</strong> ${fir.name}</p>
+                    <p><strong>Phone:</strong> ${fir.phone}</p>
+                    <p><strong>Filed Date:</strong> ${fir.filedDate}</p>
+                    <p><strong>Station:</strong> ${fir.station}</p>
+                    <p style="margin-top: 10px"><strong>Description:</strong><br>${fir.description || 'N/A'}</p>
+                </div>
+
+                <div class="card">
                     <h2 style="margin-bottom: 20px">Case Timeline</h2>
                     <div class="timeline">
                         ${fir.timeline.map(item => `
@@ -263,6 +482,7 @@
                     </div>
                 </div>
 
+                ${fir.officer ? `
                 <div class="card">
                     <h2 style="margin-bottom: 20px">Assigned Officer</h2>
                     <div class="officer-info">
@@ -275,9 +495,9 @@
                     <div style="margin-top: 15px">
                         <p style="margin-bottom: 8px">📞 ${fir.officer.phone}</p>
                         <p style="margin-bottom: 8px">✉️ ${fir.officer.email}</p>
-                        <p>📍 ${fir.station}</p>
                     </div>
                 </div>
+                ` : '<div class="card"><p>Officer not yet assigned. You will be notified once an officer is assigned to your case.</p></div>'}
 
                 <div class="card">
                     <h2 style="margin-bottom: 20px">Documents</h2>
@@ -287,6 +507,85 @@
                             <button style="background: none; border: none; color: #2563eb; cursor: pointer">Download</button>
                         </div>
                     `).join('')}
+                </div>
+            `;
+        }
+
+        function renderFileFIR() {
+            return `
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">File New FIR</h2>
+                    <form id="newFIRForm" onsubmit="fileNewFIR(event); return false;">
+                        <div class="form-group">
+                            <label>Full Name *</label>
+                            <input type="text" id="firName" placeholder="Enter your full name" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Phone Number *</label>
+                            <input type="tel" id="firPhone" placeholder="+91-XXXXXXXXXX" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="firEmail" placeholder="your.email@example.com">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Crime Type *</label>
+                            <select id="firType" required>
+                                <option value="">Select crime type</option>
+                                <option value="Theft">Theft</option>
+                                <option value="Robbery">Robbery</option>
+                                <option value="Cyber Crime">Cyber Crime</option>
+                                <option value="Fraud">Fraud</option>
+                                <option value="Assault">Assault</option>
+                                <option value="Domestic Violence">Domestic Violence</option>
+                                <option value="Harassment">Harassment</option>
+                                <option value="Missing Person">Missing Person</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Police Station *</label>
+                            <select id="firStation" required>
+                                <option value="">Select police station</option>
+                                ${policeStations.map(station => `
+                                    <option value="${station.name}">${station.name}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Incident Location</label>
+                            <input type="text" id="firLocation" placeholder="Where did the incident occur?">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Date & Time of Incident</label>
+                            <input type="datetime-local" id="firDateTime">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Detailed Description *</label>
+                            <textarea id="firDescription" rows="5" placeholder="Describe the incident in detail..." required></textarea>
+                        </div>
+
+                        <button type="submit" class="btn">Submit FIR</button>
+                        <button type="reset" class="btn btn-secondary" style="margin-left: 10px">Clear Form</button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h3 style="margin-bottom: 10px">Important Information</h3>
+                    <ul style="padding-left: 20px; line-height: 1.8">
+                        <li>Keep your FIR number safe for future tracking</li>
+                        <li>You will receive notifications about case updates</li>
+                        <li>Upload evidence in the "Evidence Upload" section</li>
+                        <li>An officer will be assigned within 24-48 hours</li>
+                        <li>For emergencies, call 112 immediately</li>
+                    </ul>
                 </div>
             `;
         }
@@ -302,9 +601,10 @@
                     ${policeStations.map(station => `
                         <div class="police-station">
                             <h3>${station.name}</h3>
+                            <p style="color: #6b7280; font-size: 14px; margin: 5px 0">📍 ${station.address}</p>
                             <p style="color: #6b7280; font-size: 14px; margin: 5px 0">Officer In-Charge: ${station.officer}</p>
                             <p style="color: #6b7280; font-size: 14px">Active Cases: ${station.cases}</p>
-                            <button style="margin-top: 10px; background: none; border: none; color: #2563eb; cursor: pointer">Get Directions →</button>
+                            <button onclick="alert('Directions to ${station.name}\\n${station.address}')" style="margin-top: 10px; background: none; border: none; color: #2563eb; cursor: pointer">Get Directions →</button>
                         </div>
                     `).join('')}
                 </div>
@@ -344,8 +644,9 @@
             return `
                 <div class="card">
                     <h2 style="margin-bottom: 20px">Notifications</h2>
-                    ${notifications.map(notif => `
-                        <div class="notification ${!notif.read ? 'unread' : ''}">
+                    ${userNotifications.length === 0 ? '<p>No notifications yet.</p>' : ''}
+                    ${userNotifications.map(notif => `
+                        <div class="notification ${!notif.read ? 'unread' : ''}" onclick="markNotificationRead(${notif.id})">
                             <div style="display: flex; justify-content: space-between; align-items: start">
                                 <div>
                                     <p style="font-weight: 500; margin-bottom: 5px">${notif.text}</p>
@@ -360,23 +661,43 @@
         }
 
         function renderEvidenceUpload() {
+            const currentFIR = appState.currentFIR;
+            const evidenceFiles = currentFIR && currentFIR.evidence ? currentFIR.evidence : [];
+            
             return `
                 <div class="card">
                     <h2 style="margin-bottom: 20px">Digital Evidence Locker</h2>
-                    <div class="upload-area" onclick="alert('File upload feature - connect to backend')">
+                    
+                    ${currentFIR ? `<p style="margin-bottom: 15px">Uploading evidence for FIR: <strong>${currentFIR.number}</strong></p>` : ''}
+                    
+                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                         <div style="font-size: 48px; margin-bottom: 10px">📤</div>
-                        <p style="color: #6b7280; margin-bottom: 5px">Drag and drop files here or click to browse</p>
+                        <p style="color: #6b7280; margin-bottom: 5px">Click to upload files</p>
                         <p style="color: #9ca3af; font-size: 14px">Supported: Images, Videos, Documents (Max 10MB)</p>
-                        <button style="margin-top: 15px; padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer">Choose Files</button>
+                        <input 
+                            type="file" 
+                            id="fileInput" 
+                            multiple 
+                            accept="image/*,video/*,.pdf,.doc,.docx" 
+                            style="display: none"
+                            onchange="handleFileUpload(event)"
+                        >
                     </div>
                     
-                    <div style="margin-top: 30px">
-                        <h3 style="margin-bottom: 15px">Uploaded Evidence</h3>
-                        <div class="document-item">
-                            <span>theft_evidence_photo.jpg</span>
-                            <span style="color: #10b981">✓ Uploaded</span>
-                        </div>
+                    ${evidenceFiles.length > 0 ? `
+                    <div class="file-list">
+                        <h3 style="margin-bottom: 15px">Uploaded Evidence (${evidenceFiles.length})</h3>
+                        ${evidenceFiles.map((file, index) => `
+                            <div class="file-item">
+                                <div>
+                                    <strong>${file.name}</strong><br>
+                                    <span style="color: #6b7280; font-size: 14px">${file.size} | Uploaded: ${file.uploadDate}</span>
+                                </div>
+                                <button onclick="removeFile(${index})">Remove</button>
+                            </div>
+                        `).join('')}
                     </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -398,23 +719,21 @@
                         </div>
                     </div>
 
-                    <div style="margin-bottom: 20px">
-                        <label style="display: block; font-weight: 500; margin-bottom: 10px">Your Feedback</label>
+                    <div class="form-group">
+                        <label>Your Feedback</label>
                         <textarea 
-                            style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-family: inherit"
+                            id="feedbackText"
                             rows="4"
                             placeholder="Share your experience..."
                         ></textarea>
                     </div>
 
-                    <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px">
-                        Submit Feedback
-                    </button>
+                    <button onclick="submitFeedback()" class="btn">Submit Feedback</button>
 
                     <div style="margin-top: 30px; padding: 15px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px">
                         <h3 style="color: #991b1b; margin-bottom: 10px">Need to Escalate?</h3>
                         <p style="color: #b91c1c; font-size: 14px; margin-bottom: 15px">If you're not satisfied with the progress, you can escalate to senior officers.</p>
-                        <button style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer">
+                        <button onclick="alert('Escalation request submitted. A senior officer will contact you within 24 hours.')" style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer">
                             Escalate Case
                         </button>
                     </div>
@@ -427,12 +746,11 @@
         // ============================================
 
         function render() {
-            // Render navigation
             document.getElementById('navBar').innerHTML = renderNavigation();
             
-            // Render content based on active tab
             const contentMap = {
                 'dashboard': renderDashboard,
+                'fileFIR': renderFileFIR,
                 'map': renderMap,
                 'chatbot': renderChatbot,
                 'notifications': renderNotifications,
@@ -442,7 +760,6 @@
             
             document.getElementById('content').innerHTML = contentMap[appState.activeTab]();
             
-            // Auto-scroll chat to bottom if on chatbot tab
             if (appState.activeTab === 'chatbot') {
                 setTimeout(() => {
                     const chatMessages = document.getElementById('chatMessages');
@@ -457,13 +774,7 @@
         // INITIALIZE APP
         // ============================================
 
-        // Initial render
         render();
-
-        // Emergency button handler
-        document.querySelector('.emergency-btn').addEventListener('click', () => {
-            alert('Emergency Call: 112\n\nThis would dial emergency services in a real app.');
-        });
 
     </script>
 </body>
