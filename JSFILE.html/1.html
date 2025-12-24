@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart FIR Tracking System</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f3f4f6; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: #2563eb; color: white; padding: 20px; margin-bottom: 20px; }
+        .header h1 { font-size: 24px; }
+        .nav { background: white; padding: 10px 0; margin-bottom: 20px; display: flex; gap: 10px; overflow-x: auto; }
+        .nav button { padding: 10px 20px; border: none; background: white; cursor: pointer; border-bottom: 2px solid transparent; }
+        .nav button.active { border-bottom-color: #2563eb; color: #2563eb; font-weight: bold; }
+        .card { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 20px; }
+        .search-box input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; }
+        .search-box button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .stat-card h3 { color: #6b7280; font-size: 14px; margin-bottom: 5px; }
+        .stat-card p { font-size: 24px; font-weight: bold; color: #2563eb; }
+        .timeline { position: relative; padding-left: 40px; }
+        .timeline::before { content: ''; position: absolute; left: 15px; top: 0; bottom: 0; width: 2px; background: #d1d5db; }
+        .timeline-item { position: relative; margin-bottom: 20px; }
+        .timeline-dot { position: absolute; left: -33px; width: 16px; height: 16px; border-radius: 50%; }
+        .timeline-dot.completed { background: #10b981; }
+        .timeline-dot.current { background: #2563eb; }
+        .timeline-dot.pending { background: #d1d5db; }
+        .chat-container { height: 500px; display: flex; flex-direction: column; }
+        .chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .chat-message { max-width: 70%; padding: 10px 15px; border-radius: 8px; }
+        .chat-message.user { background: #2563eb; color: white; margin-left: auto; }
+        .chat-message.bot { background: #f3f4f6; }
+        .chat-input { display: flex; gap: 10px; padding: 15px; border-top: 1px solid #e5e7eb; }
+        .chat-input input { flex: 1; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; }
+        .chat-input button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .police-station { padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 10px; cursor: pointer; }
+        .police-station:hover { background: #f9fafb; }
+        .notification { padding: 15px; border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 10px; }
+        .notification.unread { background: #eff6ff; border-color: #bfdbfe; }
+        .hidden { display: none; }
+        .emergency-btn { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; background: #dc2626; color: white; border: none; border-radius: 50%; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .officer-info { display: flex; gap: 15px; align-items: center; margin: 20px 0; }
+        .officer-avatar { width: 60px; height: 60px; background: #dbeafe; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px; color: #2563eb; }
+        .document-item { padding: 10px; background: #f9fafb; border-radius: 4px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+        .upload-area { border: 2px dashed #d1d5db; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; }
+        .upload-area:hover { background: #f9fafb; }
+        .feedback-stars { display: flex; gap: 5px; font-size: 32px; cursor: pointer; margin: 20px 0; }
+        .feedback-stars span { color: #d1d5db; }
+        .feedback-stars span.active { color: #fbbf24; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="container">
+            <h1>Smart FIR Tracking System</h1>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="nav" id="navBar"></div>
+        <div id="content"></div>
+    </div>
+
+    <button class="emergency-btn">112</button>
+
+    <script>
+        // ============================================
+        // DATA LAYER - Mock Database
+        // ============================================
+        
+        const mockFIRs = {
+            '2024/ROH/1234': {
+                number: '2024/ROH/1234',
+                type: 'Theft',
+                status: 'Under Investigation',
+                progress: 60,
+                officer: {
+                    name: 'Inspector Rajesh Singh',
+                    badge: 'ROH-4523',
+                    phone: '+91-9876543210',
+                    email: 'r.singh@haryana.police.gov.in'
+                },
+                station: 'Sector 14 Police Station, Rohtak',
+                filedDate: '2024-12-20',
+                lastUpdate: '2024-12-23',
+                timeline: [
+                    { stage: 'FIR Filed', date: '2024-12-20', status: 'completed' },
+                    { stage: 'Officer Assigned', date: '2024-12-20', status: 'completed' },
+                    { stage: 'Investigation Started', date: '2024-12-21', status: 'completed' },
+                    { stage: 'Evidence Collection', date: '2024-12-23', status: 'current' },
+                    { stage: 'Report Preparation', date: 'Pending', status: 'pending' },
+                    { stage: 'Case Closure', date: 'Pending', status: 'pending' }
+                ],
+                avgTime: '45-60 days',
+                documents: ['FIR Copy', 'Evidence Photos', 'Witness Statement']
+            }
+        };
+
+        const policeStations = [
+            { id: 1, name: 'Sector 14 Police Station', lat: 28.8955, lng: 76.6066, cases: 45, officer: 'SI Kumar' },
+            { id: 2, name: 'Civil Lines Police Station', lat: 28.8845, lng: 76.6156, cases: 62, officer: 'SI Sharma' },
+            { id: 3, name: 'Model Town Police Station', lat: 28.9055, lng: 76.5966, cases: 38, officer: 'SI Verma' }
+        ];
+
+        const notifications = [
+            { id: 1, text: 'FIR #2024/ROH/1234 registered successfully', time: '2 hours ago', read: false },
+            { id: 2, text: 'Officer Singh assigned to your case', time: '5 hours ago', read: false },
+            { id: 3, text: 'Investigation update available', time: '1 day ago', read: true }
+        ];
+
+        const chatResponses = {
+            'theft': 'For theft cases, you need: 1) Details of stolen items with photos if available, 2) Time and location, 3) Any witness information, 4) Identity proof. Visit your nearest police station or file online.',
+            'cyber': 'For cyber fraud: 1) Save all transaction details, 2) Screenshot conversations, 3) Bank statements, 4) File at cybercrime.gov.in or visit Cyber Cell. Act quickly!',
+            'documents': 'Required documents: 1) Identity proof (Aadhaar/PAN/Driving License), 2) Address proof, 3) Evidence related to crime, 4) Witness details if any.',
+            'status': 'Enter your FIR number in the Track FIR section to see real-time status updates.',
+            'time': 'Average case resolution time: Theft (45-60 days), Cyber Crime (60-90 days), Assault (30-45 days). Your case timeline may vary.'
+        };
+
+        // ============================================
+        // STATE MANAGEMENT
+        // ============================================
+        
+        let appState = {
+            activeTab: 'dashboard',
+            currentFIR: mockFIRs['2024/ROH/1234'],
+            firNumber: '',
+            chatMessages: [
+                { sender: 'bot', text: 'Hello! How can I help you with filing or tracking your FIR?' }
+            ],
+            selectedStation: null,
+            rating: 0
+        };
+
+        // ============================================
+        // CORE FUNCTIONS
+        // ============================================
+
+        function setState(newState) {
+            appState = { ...appState, ...newState };
+            render();
+        }
+
+        function trackFIR() {
+            const firNumber = document.getElementById('firInput').value;
+            if (mockFIRs[firNumber]) {
+                setState({ 
+                    currentFIR: mockFIRs[firNumber],
+                    firNumber: firNumber,
+                    activeTab: 'dashboard'
+                });
+            } else {
+                alert('FIR not found. Please check the number and try again.');
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // Add user message
+            appState.chatMessages.push({ sender: 'user', text: message });
+            render();
+
+            // Simulate bot response
+            setTimeout(() => {
+                let response = "I understand your concern. For specific legal advice, please consult with a legal expert. You can also call the national helpline: 112 for emergencies.";
+                
+                const lowerMessage = message.toLowerCase();
+                for (const [key, value] of Object.entries(chatResponses)) {
+                    if (lowerMessage.includes(key)) {
+                        response = value;
+                        break;
+                    }
+                }
+                
+                appState.chatMessages.push({ sender: 'bot', text: response });
+                render();
+                
+                // Scroll to bottom
+                const chatMessages = document.getElementById('chatMessages');
+                if (chatMessages) {
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            }, 1000);
+
+            input.value = '';
+        }
+
+        function setRating(stars) {
+            setState({ rating: stars });
+        }
+
+        // ============================================
+        // RENDER FUNCTIONS
+        // ============================================
+
+        function renderNavigation() {
+            const tabs = [
+                { id: 'dashboard', label: 'Track FIR' },
+                { id: 'map', label: 'Police Stations' },
+                { id: 'chatbot', label: 'FIR Assistant' },
+                { id: 'notifications', label: 'Notifications' },
+                { id: 'evidence', label: 'Evidence Upload' },
+                { id: 'feedback', label: 'Feedback' }
+            ];
+
+            return tabs.map(tab => `
+                <button 
+                    class="${appState.activeTab === tab.id ? 'active' : ''}"
+                    onclick="setState({ activeTab: '${tab.id}' })"
+                >
+                    ${tab.label}
+                </button>
+            `).join('');
+        }
+
+        function renderDashboard() {
+            const fir = appState.currentFIR;
+            
+            return `
+                <div class="card search-box">
+                    <input 
+                        type="text" 
+                        id="firInput"
+                        placeholder="Enter FIR Number (e.g., 2024/ROH/1234)"
+                        value="${appState.firNumber}"
+                    >
+                    <button onclick="trackFIR()">Track FIR</button>
+                </div>
+
+                <div class="stats">
+                    <div class="stat-card">
+                        <h3>FIR Status</h3>
+                        <p>${fir.status}</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Progress</h3>
+                        <p style="color: #10b981">${fir.progress}%</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Expected Time</h3>
+                        <p style="color: #f59e0b">${fir.avgTime}</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Case Timeline</h2>
+                    <div class="timeline">
+                        ${fir.timeline.map(item => `
+                            <div class="timeline-item">
+                                <div class="timeline-dot ${item.status}"></div>
+                                <div>
+                                    <strong>${item.stage}</strong><br>
+                                    <span style="color: #6b7280; font-size: 14px">${item.date}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Assigned Officer</h2>
+                    <div class="officer-info">
+                        <div class="officer-avatar">👮</div>
+                        <div>
+                            <h3>${fir.officer.name}</h3>
+                            <p style="color: #6b7280">Badge: ${fir.officer.badge}</p>
+                        </div>
+                    </div>
+                    <div style="margin-top: 15px">
+                        <p style="margin-bottom: 8px">📞 ${fir.officer.phone}</p>
+                        <p style="margin-bottom: 8px">✉️ ${fir.officer.email}</p>
+                        <p>📍 ${fir.station}</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Documents</h2>
+                    ${fir.documents.map(doc => `
+                        <div class="document-item">
+                            <span>📄 ${doc}</span>
+                            <button style="background: none; border: none; color: #2563eb; cursor: pointer">Download</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderMap() {
+            return `
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Nearby Police Stations</h2>
+                    <div style="background: #e5e7eb; height: 300px; border-radius: 8px; display: flex; align-items: center; justify-content: center; margin-bottom: 20px">
+                        <span style="color: #6b7280; font-size: 18px">🗺️ Map View (Rohtak, Haryana)</span>
+                    </div>
+                    
+                    ${policeStations.map(station => `
+                        <div class="police-station">
+                            <h3>${station.name}</h3>
+                            <p style="color: #6b7280; font-size: 14px; margin: 5px 0">Officer In-Charge: ${station.officer}</p>
+                            <p style="color: #6b7280; font-size: 14px">Active Cases: ${station.cases}</p>
+                            <button style="margin-top: 10px; background: none; border: none; color: #2563eb; cursor: pointer">Get Directions →</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderChatbot() {
+            return `
+                <div class="card chat-container">
+                    <div style="padding: 15px; border-bottom: 1px solid #e5e7eb">
+                        <h2>FIR Assistant</h2>
+                        <p style="color: #6b7280; font-size: 14px">Ask anything about filing or tracking FIRs</p>
+                    </div>
+                    
+                    <div class="chat-messages" id="chatMessages">
+                        ${appState.chatMessages.map(msg => `
+                            <div class="chat-message ${msg.sender}">
+                                ${msg.text}
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                    <div class="chat-input">
+                        <input 
+                            type="text" 
+                            id="chatInput"
+                            placeholder="Type your question..."
+                            onkeypress="if(event.key === 'Enter') sendChatMessage()"
+                        >
+                        <button onclick="sendChatMessage()">Send</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNotifications() {
+            return `
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Notifications</h2>
+                    ${notifications.map(notif => `
+                        <div class="notification ${!notif.read ? 'unread' : ''}">
+                            <div style="display: flex; justify-content: space-between; align-items: start">
+                                <div>
+                                    <p style="font-weight: 500; margin-bottom: 5px">${notif.text}</p>
+                                    <p style="color: #6b7280; font-size: 14px">${notif.time}</p>
+                                </div>
+                                ${!notif.read ? '<span style="width: 8px; height: 8px; background: #2563eb; border-radius: 50%; display: inline-block"></span>' : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderEvidenceUpload() {
+            return `
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Digital Evidence Locker</h2>
+                    <div class="upload-area" onclick="alert('File upload feature - connect to backend')">
+                        <div style="font-size: 48px; margin-bottom: 10px">📤</div>
+                        <p style="color: #6b7280; margin-bottom: 5px">Drag and drop files here or click to browse</p>
+                        <p style="color: #9ca3af; font-size: 14px">Supported: Images, Videos, Documents (Max 10MB)</p>
+                        <button style="margin-top: 15px; padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer">Choose Files</button>
+                    </div>
+                    
+                    <div style="margin-top: 30px">
+                        <h3 style="margin-bottom: 15px">Uploaded Evidence</h3>
+                        <div class="document-item">
+                            <span>theft_evidence_photo.jpg</span>
+                            <span style="color: #10b981">✓ Uploaded</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderFeedback() {
+            return `
+                <div class="card">
+                    <h2 style="margin-bottom: 20px">Feedback & Support</h2>
+                    
+                    <div style="margin-bottom: 20px">
+                        <label style="display: block; font-weight: 500; margin-bottom: 10px">Rate Officer Behavior</label>
+                        <div class="feedback-stars">
+                            ${[1, 2, 3, 4, 5].map(star => `
+                                <span 
+                                    class="${star <= appState.rating ? 'active' : ''}"
+                                    onclick="setRating(${star})"
+                                >⭐</span>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom: 20px">
+                        <label style="display: block; font-weight: 500; margin-bottom: 10px">Your Feedback</label>
+                        <textarea 
+                            style="width: 100%; padding: 10px; border: 1px solid #d1d5db; border-radius: 4px; font-family: inherit"
+                            rows="4"
+                            placeholder="Share your experience..."
+                        ></textarea>
+                    </div>
+
+                    <button style="width: 100%; padding: 12px; background: #2563eb; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px">
+                        Submit Feedback
+                    </button>
+
+                    <div style="margin-top: 30px; padding: 15px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px">
+                        <h3 style="color: #991b1b; margin-bottom: 10px">Need to Escalate?</h3>
+                        <p style="color: #b91c1c; font-size: 14px; margin-bottom: 15px">If you're not satisfied with the progress, you can escalate to senior officers.</p>
+                        <button style="padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 4px; cursor: pointer">
+                            Escalate Case
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================
+        // MAIN RENDER FUNCTION
+        // ============================================
+
+        function render() {
+            // Render navigation
+            document.getElementById('navBar').innerHTML = renderNavigation();
+            
+            // Render content based on active tab
+            const contentMap = {
+                'dashboard': renderDashboard,
+                'map': renderMap,
+                'chatbot': renderChatbot,
+                'notifications': renderNotifications,
+                'evidence': renderEvidenceUpload,
+                'feedback': renderFeedback
+            };
+            
+            document.getElementById('content').innerHTML = contentMap[appState.activeTab]();
+            
+            // Auto-scroll chat to bottom if on chatbot tab
+            if (appState.activeTab === 'chatbot') {
+                setTimeout(() => {
+                    const chatMessages = document.getElementById('chatMessages');
+                    if (chatMessages) {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+                }, 0);
+            }
+        }
+
+        // ============================================
+        // INITIALIZE APP
+        // ============================================
+
+        // Initial render
+        render();
+
+        // Emergency button handler
+        document.querySelector('.emergency-btn').addEventListener('click', () => {
+            alert('Emergency Call: 112\n\nThis would dial emergency services in a real app.');
+        });
+
+    </script>
+</body>
+</html>
